@@ -1,0 +1,74 @@
+{
+  "version": "1.0",
+  "description": "Urban Compliance Rules — Gujarat GDCR 2017 & SUDA Development Plan 2035",
+  "rules": [
+    {
+      "id": "R001",
+      "name": "Water Body Buffer Zone",
+      "description": "No new construction within 500m of any water body (river, lake, canal)",
+      "legal_reference": "Gujarat GDCR 2017 § 12.3",
+      "target_class": "Construction / Urban Sprawl",
+      "rule_type": "buffer_exclusion",
+      "parameters": {
+        "buffer_meters": 500,
+        "protected_zone": "water_body"
+      },
+      "severity": "CRITICAL",
+      "action": "Immediate demolition notice + FIR"
+    },
+    {
+      "id": "R002",
+      "name": "Green Belt Protection",
+      "description": "No construction or land alteration permitted in designated Green Belt zones",
+      "legal_reference": "Gujarat GDCR 2017 § 15.1",
+      "target_class": "Construction / Urban Sprawl",
+      "rule_type": "zone_exclusion",
+      "parameters": {
+        "prohibited_zone": "green_belt"
+      },
+      "severity": "HIGH",
+      "action": "Stop-work order + inspection"
+    },
+    {
+      "id": "R003",
+      "name": "Minimum Vegetation Cover",
+      "description": "Green cover in residential zones must not decrease below 30%",
+      "legal_reference": "SUDA Development Plan 2035 § 8.2",
+      "target_class": "Vegetation Clearance / Deforestation",
+      "rule_type": "percentage_threshold",
+      "parameters": {
+        "zone_type": "residential",
+        "min_green_cover_percent": 30
+      },
+      "severity": "MEDIUM",
+      "action": "Compensatory plantation order"
+    },
+    {
+      "id": "R004",
+      "name": "Tapi Riverfront Buffer",
+      "description": "No construction within 500m of the Tapi Riverfront development zone",
+      "legal_reference": "Surat GDCR — Tapi Riverfront Special Regulation",
+      "target_class": "Construction / Urban Sprawl",
+      "rule_type": "buffer_exclusion",
+      "parameters": {
+        "buffer_meters": 500,
+        "protected_zone": "tapi_river"
+      },
+      "severity": "CRITICAL",
+      "action": "Demolition notice + municipal court proceedings"
+    },
+    {
+      "id": "R005",
+      "name": "Industrial Zone Restriction",
+      "description": "Industrial activity and heavy construction prohibited in Zone R1 (Residential)",
+      "legal_reference": "Gujarat TP & UD Act 1976 § 22",
+      "target_class": "Construction / Urban Sprawl",
+      "rule_type": "zone_exclusion",
+      "parameters": {
+        "prohibited_zone": "residential_r1"
+      },
+      "severity": "HIGH",
+      "action": "Cease-and-desist order"
+    }
+  ]
+}

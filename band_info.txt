@@ -1,0 +1,35 @@
+
+=== aguasclaras ===
+  imgs_1/B02.tif: MISSING
+  imgs_1/B03.tif: MISSING
+  imgs_1/B04.tif: MISSING
+  imgs_1/B08.tif: MISSING
+  cm/cm.png: shape=(471, 525, 3), dtype=uint8
+
+=== bercy ===
+  imgs_1/B02.tif: MISSING
+  imgs_1/B03.tif: MISSING
+  imgs_1/B04.tif: MISSING
+  imgs_1/B08.tif: MISSING
+  cm/cm.png: shape=(395, 360, 4), dtype=uint8
+
+=== bordeaux ===
+  imgs_1/B02.tif: MISSING
+  imgs_1/B03.tif: MISSING
+  imgs_1/B04.tif: MISSING
+  imgs_1/B08.tif: MISSING
+  cm/cm.png: shape=(517, 461, 4), dtype=uint8
+
+=== paris ===
+  imgs_1/B02.tif: MISSING
+  imgs_1/B03.tif: MISSING
+  imgs_1/B04.tif: MISSING
+  imgs_1/B08.tif: MISSING
+  cm/cm.png: shape=(408, 390, 4), dtype=uint8
+
+=== mumbai ===
+  imgs_1/B02.tif: MISSING
+  imgs_1/B03.tif: MISSING
+  imgs_1/B04.tif: MISSING
+  imgs_1/B08.tif: MISSING
+  cm/cm.png: shape=(858, 557, 4), dtype=uint8

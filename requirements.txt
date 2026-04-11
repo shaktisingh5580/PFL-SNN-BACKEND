@@ -1,0 +1,60 @@
+# Core ML
+torch>=2.0
+torchvision>=0.15
+snntorch>=0.9
+numpy
+scipy
+torchgeo
+
+# Geospatial
+rasterio
+shapely
+geopandas
+pyproj
+sentinelhub
+s2cloudless
+
+# Database
+psycopg2-binary
+sqlalchemy
+geoalchemy2
+
+# API (Skipped for now)
+# fastapi
+# uvicorn[standard]
+# websockets
+# python-dotenv
+
+# Reporting
+reportlab
+Pillow
+matplotlib
+
+# ===== CHATBOT & RAG (Skipped for now) =====
+# langchain>=0.3
+# langchain-groq>=0.2
+# langchain-community>=0.3
+# langgraph>=0.2
+# sentence-transformers>=3.0
+
+# RAG / Vector Store
+# chromadb>=0.5
+# pypdf>=4.0
+# tiktoken
+
+# Multilingual
+# googletrans==4.0.0rc1
+
+# ===== FOUNDATION MODEL =====
+timm>=1.0
+einops>=0.7
+
+# ===== BLOCKCHAIN AUDIT & INTEGRATION (Skipped for now) =====
+# qrcode>=7.4
+# twilio
+
+# Utilities
+tqdm
+scikit-learn
+pydantic>=2.0
+python-multipart

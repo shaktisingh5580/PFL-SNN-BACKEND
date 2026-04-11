@@ -1,0 +1,44 @@
+{
+  "rules": [
+    {
+      "id": "R001",
+      "name": "No construction near water bodies",
+      "description": "No new construction within 500m of a water body (Gujarat GDCR 2017, Section 12.3)",
+      "legal_ref": "Gujarat GDCR 2017 § 12.3 — Riverfront & Water Body Buffer Zone",
+      "type": "buffer_exclusion",
+      "parameters": { "buffer_m": 500, "change_type": "new_construction", "zone_layer": "water_bodies" }
+    },
+    {
+      "id": "R002",
+      "name": "Minimum green cover in residential zones",
+      "description": "Green cover must not decrease below 30% (Gujarat TP Act § 22)",
+      "legal_ref": "Gujarat TP & UD Act 1976 § 22 — Development Plan Compliance",
+      "type": "percentage_threshold",
+      "parameters": { "min_percent": 30, "index": "ndvi", "zone_layer": "residential_zones" }
+    },
+    {
+      "id": "R003",
+      "name": "No industrial activity in Zone A",
+      "description": "Industrial activity is prohibited in Zone A (Surat DP Zone Classification)",
+      "legal_ref": "SUDA Development Plan 2035 — Residential Zone R1 Restrictions",
+      "type": "zone_exclusion",
+      "parameters": { "change_type": "industrial", "zone_layer": "zone_a" }
+    },
+    {
+      "id": "R004",
+      "name": "Tapi Riverfront Buffer",
+      "description": "No construction within 500m of the Tapi riverfront (Surat specific)",
+      "legal_ref": "Surat GDCR — 500m Tapi Riverfront Buffer Zone Restriction",
+      "type": "buffer_exclusion",
+      "parameters": { "buffer_m": 500, "change_type": "new_construction", "zone_layer": "tapi_riverfront" }
+    },
+    {
+      "id": "R005",
+      "name": "Green Belt Encroachment",
+      "description": "No construction allowed on designated Green Belt land",
+      "legal_ref": "Gujarat GDCR 2017 § 15.1 — Protected Green Belt Zones",
+      "type": "zone_exclusion",
+      "parameters": { "change_type": "new_construction", "zone_layer": "green_belt" }
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "app_name": "Surat Satellite Compliance Engine",
+  "tagline": "AI-Powered Urban Compliance Monitoring",
+  "nav": {
+    "home": "Home",
+    "map": "Map View",
+    "detections": "Detections",
+    "reports": "Reports",
+    "settings": "Settings"
+  },
+  "chat": {
+    "title": "SSCE Assistant",
+    "placeholder": "Ask about zoning, detections, compliance...",
+    "send": "Send",
+    "typing": "Analyzing...",
+    "welcome": "Hello! I'm the Surat Satellite Compliance Engine. I can help you check zoning regulations, view change detections, run compliance checks, and generate reports. How can I assist you?",
+    "error": "Something went wrong. Please try again.",
+    "voice_prompt": "Speak now..."
+  },
+  "actions": {
+    "generate_report": "Generate Report",
+    "draft_notice": "Draft Notice",
+    "show_on_map": "Show on Map",
+    "approve": "Approve Violation",
+    "reject": "Reject (False Positive)",
+    "edit_bounds": "Edit Bounds",
+    "dispatch_officer": "Dispatch Officer",
+    "scan_city": "Scan City"
+  },
+  "alerts": {
+    "new_alert": "New Alert",
+    "severity": {
+      "LOW": "Low",
+      "MEDIUM": "Medium",
+      "HIGH": "High",
+      "CRITICAL": "Critical"
+    }
+  },
+  "map": {
+    "layers": "Layers",
+    "change_overlay": "Change Overlay",
+    "zone_boundaries": "Zone Boundaries",
+    "spectral_ndvi": "NDVI Layer",
+    "spectral_ndbi": "NDBI Layer",
+    "violations": "Violations",
+    "before_after": "Before / After"
+  },
+  "status": {
+    "scanning": "Scanning...",
+    "complete": "Complete",
+    "pending": "Pending Review",
+    "approved": "Approved",
+    "rejected": "Rejected"
+  }
+}

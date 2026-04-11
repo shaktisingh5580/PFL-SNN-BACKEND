@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+env/
+venv/
+ENV/
+.venv/
+
+# Environment variables
+.env
+
+# Output directories (keep structure but ignore data)
+outputs/data/*
+outputs/scans/*
+!outputs/data/.gitkeep
+!outputs/scans/.gitkeep
+
+# Dataset downloads
+data/
+*.zip
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+*.sqlite3
