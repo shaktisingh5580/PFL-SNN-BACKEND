@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS scans (
     violations JSONB,
     violation_count INTEGER DEFAULT 0,
     max_severity TEXT,
+    risk_score INTEGER,
+    next_scan_due TIMESTAMPTZ,
     
     -- Blockchain evidence
     evidence_hash TEXT,
@@ -280,6 +282,8 @@ class SupabaseClient:
             "violations": json.dumps(violations),
             "violation_count": len(violations),
             "max_severity": max_severity if violations else None,
+            "risk_score": report_data.get("risk_score", 0),
+            "next_scan_due": report_data.get("next_scan_due", None),
             "evidence_hash": blockchain.get("hash", ""),
             "model_name": model_info.get("name", "Siamese-SNN v3"),
             "inference_time_seconds": model_info.get("inference_time_seconds", 0),
@@ -355,6 +359,93 @@ class SupabaseClient:
             logger.error(f"Query failed: {e}")
             return []
     
+    # ═══════════════════════════════════════════════════════════
+    #  Chat Conversation CRUD
+    # ═══════════════════════════════════════════════════════════
+
+    def create_conversation(self, title: str = "New Conversation") -> Optional[Dict]:
+        """Create a new chat conversation."""
+        if not self.is_connected:
+            return None
+        try:
+            result = self.client.table("chat_conversations").insert({
+                "title": title,
+            }).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Create conversation failed: {e}")
+            return None
+
+    def list_conversations(self, limit: int = 50) -> List[Dict]:
+        """List all conversations ordered by most recent."""
+        if not self.is_connected:
+            return []
+        try:
+            result = (
+                self.client.table("chat_conversations")
+                .select("*")
+                .order("updated_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return result.data or []
+        except Exception as e:
+            logger.error(f"List conversations failed: {e}")
+            return []
+
+    def get_messages(self, conversation_id: str, limit: int = 50) -> List[Dict]:
+        """Get messages for a conversation, ordered chronologically."""
+        if not self.is_connected:
+            return []
+        try:
+            result = (
+                self.client.table("chat_messages")
+                .select("*")
+                .eq("conversation_id", conversation_id)
+                .order("created_at", desc=False)
+                .limit(limit)
+                .execute()
+            )
+            return result.data or []
+        except Exception as e:
+            logger.error(f"Get messages failed: {e}")
+            return []
+
+    def save_message(self, conversation_id: str, role: str, content: str) -> Optional[Dict]:
+        """Save a chat message and update conversation timestamp."""
+        if not self.is_connected:
+            return None
+        try:
+            msg = self.client.table("chat_messages").insert({
+                "conversation_id": conversation_id,
+                "role": role,
+                "content": content,
+            }).execute()
+            # Update conversation's updated_at and auto-title from first user message
+            updates = {"updated_at": datetime.utcnow().isoformat()}
+            if role == "user":
+                # Auto-title from first user message (truncated to 60 chars)
+                convos = self.client.table("chat_conversations").select("title").eq("id", conversation_id).execute()
+                if convos.data and convos.data[0].get("title") == "New Conversation":
+                    updates["title"] = content[:60] + ("..." if len(content) > 60 else "")
+            self.client.table("chat_conversations").update(updates).eq("id", conversation_id).execute()
+            return msg.data[0] if msg.data else None
+        except Exception as e:
+            logger.error(f"Save message failed: {e}")
+            return None
+
+    def delete_conversation(self, conversation_id: str) -> bool:
+        """Delete a conversation and all its messages."""
+        if not self.is_connected:
+            return False
+        try:
+            self.client.table("chat_messages").delete().eq("conversation_id", conversation_id).execute()
+            self.client.table("chat_conversations").delete().eq("id", conversation_id).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Delete conversation failed: {e}")
+            return False
+
     def get_schema_sql(self) -> str:
         """Return the SQL schema to create tables in Supabase."""
         return CREATE_TABLE_SQL

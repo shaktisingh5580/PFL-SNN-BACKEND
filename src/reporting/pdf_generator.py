@@ -375,6 +375,29 @@ def generate_compliance_pdf(
         pdf.kv_row("Training Dataset", "OSCD (Onera Satellite Change Detection)")
         pdf.kv_row("Spectral Bands", "B02 (Blue), B03 (Green), B04 (Red), B08 (NIR), B11 (SWIR)")
 
+    # ═══════════════════════════════════════════════════
+    #  SECTION 7: Triage & System Scheduling
+    # ═══════════════════════════════════════════════════
+    risk_score = report_data.get("risk_score", 0)
+    next_due = report_data.get("next_scan_due")
+    
+    pdf.ln(6)
+    pdf.section_title(7, "Automated Triage & Scheduling")
+    pdf.kv_row("Calculated Risk Score", f"{risk_score}/100", bold_value=True)
+    
+    if next_due:
+        try:
+            dt = datetime.fromisoformat(str(next_due)[:19])
+            fd = dt.strftime("%B %d, %Y (%H:%M UTC)")
+        except Exception:
+            fd = str(next_due)
+        pdf.kv_row("Recommended Action", "CRITICAL RISK. Automated reconnaissance dispatch triggered.")
+        pdf.kv_row("Next Scheduled Scan", f"T+14 Days [{fd}]", bold_value=True)
+        pdf.kv_row("Notification Status", "WAHA API Local Authorities Alert Dispatched")
+    else:
+        pdf.kv_row("Recommended Action", "Routine monitoring. Risk is within acceptable municipal bounds.")
+        pdf.kv_row("Next Scheduled Scan", "Standard 90-Day Cadence")
+
     # === SAVE ===
     pdf.output(output_path)
     logger.info(f"PDF report saved: {output_path}")

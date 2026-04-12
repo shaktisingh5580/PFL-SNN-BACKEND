@@ -130,8 +130,8 @@ function renderDetections() {
 
         // Add marker to map
         const color = d.severity === 'CRITICAL' ? '#ff5252' :
-                      d.severity === 'HIGH' ? '#ff9800' :
-                      d.severity === 'MEDIUM' ? '#ffb74d' : '#76b900';
+            d.severity === 'HIGH' ? '#ff9800' :
+                d.severity === 'MEDIUM' ? '#ffb74d' : '#76b900';
 
         const marker = L.circleMarker([d.lat, d.lon], {
             radius: 10,
@@ -158,12 +158,18 @@ function renderViolations() {
     list.innerHTML = '';
 
     const violations = [
-        { id: 'V001', rule: 'Water body buffer', ref: 'GDCR § 12.3', severity: 'HIGH',
-          location: '21.1756°N, 72.8312°E' },
-        { id: 'V002', rule: 'Green Belt encroachment', ref: 'GDCR § 15.1', severity: 'CRITICAL',
-          location: '21.2156°N, 72.8687°E' },
-        { id: 'V003', rule: 'Green cover minimum', ref: 'TP Act § 22', severity: 'MEDIUM',
-          location: '21.1892°N, 72.7945°E' },
+        {
+            id: 'V001', rule: 'Water body buffer', ref: 'GDCR § 12.3', severity: 'HIGH',
+            location: '21.1756°N, 72.8312°E'
+        },
+        {
+            id: 'V002', rule: 'Green Belt encroachment', ref: 'GDCR § 15.1', severity: 'CRITICAL',
+            location: '21.2156°N, 72.8687°E'
+        },
+        {
+            id: 'V003', rule: 'Green cover minimum', ref: 'TP Act § 22', severity: 'MEDIUM',
+            location: '21.1892°N, 72.7945°E'
+        },
     ];
 
     violations.forEach(v => {

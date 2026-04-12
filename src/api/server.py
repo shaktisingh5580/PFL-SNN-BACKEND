@@ -29,12 +29,14 @@ if HAS_FASTAPI:
     class ChatRequest(BaseModel):
         message: str
         session_id: str = "default"
+        conversation_id: Optional[str] = ""  # Supabase conversation ID for persistence
         language: str = "en"
-        scan_context: str = ""  # JSON of the current scan the user is viewing
+        scan_context: Optional[str] = ""  # JSON of the current scan the user is viewing
 
     class ChatResponse(BaseModel):
         response: str
         language: str
+        conversation_id: str = ""
 
     class FeedbackRequest(BaseModel):
         detection_id: str
@@ -121,10 +123,76 @@ def create_app() -> "FastAPI":
 
     @app.post("/api/chat", response_model=ChatResponse)
     async def chat_http(request: ChatRequest):
-        """HTTP chat endpoint. Passes scan_context so the agent knows what the user is viewing."""
+        """HTTP chat endpoint with persistent conversation history."""
+        from src.api.supabase_client import SupabaseClient
+        sb = SupabaseClient()
+        
+        convo_id = request.conversation_id or ""
+        history = []
+        
+        # Auto-create conversation if none provided
+        if not convo_id:
+            convo = sb.create_conversation()
+            convo_id = convo["id"] if convo else ""
+        
+        # Save user message
+        if convo_id:
+            sb.save_message(convo_id, "user", request.message)
+            # Load previous messages as history for LLM context
+            msgs = sb.get_messages(convo_id, limit=20)
+            history = [{"role": m["role"], "content": m["content"]} for m in msgs[:-1]]  # exclude current
+        
         agent = get_agent()
-        result = agent.chat_sync(request.message, request.session_id, scan_context=request.scan_context)
-        return ChatResponse(**result)
+        result = agent.chat_sync(
+            request.message,
+            request.session_id,
+            scan_context=request.scan_context or "",
+            history=history,
+        )
+        
+        # Save assistant response
+        if convo_id:
+            sb.save_message(convo_id, "assistant", result["response"])
+        
+        return ChatResponse(**result, conversation_id=convo_id)
+
+    # ===== CONVERSATION MANAGEMENT =====
+
+    @app.get("/api/chat/conversations")
+    async def list_conversations():
+        """List all chat conversations."""
+        from src.api.supabase_client import SupabaseClient
+        sb = SupabaseClient()
+        convos = sb.list_conversations()
+        return {"conversations": convos}
+
+    @app.post("/api/chat/conversations")
+    async def create_conversation():
+        """Create a new chat conversation."""
+        from src.api.supabase_client import SupabaseClient
+        sb = SupabaseClient()
+        convo = sb.create_conversation()
+        if not convo:
+            raise HTTPException(status_code=500, detail="Failed to create conversation")
+        return convo
+
+    @app.get("/api/chat/conversations/{convo_id}/messages")
+    async def get_messages(convo_id: str):
+        """Get all messages for a conversation."""
+        from src.api.supabase_client import SupabaseClient
+        sb = SupabaseClient()
+        messages = sb.get_messages(convo_id)
+        return {"messages": messages}
+
+    @app.delete("/api/chat/conversations/{convo_id}")
+    async def delete_conversation(convo_id: str):
+        """Delete a conversation and all its messages."""
+        from src.api.supabase_client import SupabaseClient
+        sb = SupabaseClient()
+        success = sb.delete_conversation(convo_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete conversation")
+        return {"deleted": True}
 
     @app.websocket("/ws/chat")
     async def chat_websocket(websocket: WebSocket):

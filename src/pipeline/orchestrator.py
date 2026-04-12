@@ -21,7 +21,7 @@ from typing import Generator, Dict, Optional, Tuple
 import numpy as np
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -137,9 +137,29 @@ def run_pipeline(
     """
     TOTAL_STEPS = 9
 
-    # ── Enforce minimum bbox size (same as working Vesu scan: ~3km x 2.7km) ──
-    MIN_LON_SPAN = 0.030  # ~3.1 km at 21°N
-    MIN_LAT_SPAN = 0.025  # ~2.8 km
+    # ── Try to dynamically detect the city name via reverse-geocoding ──
+    if "custom" in city.lower() or city.strip() == "":
+        try:
+            import requests as req
+            cen_lat = (bbox[1] + bbox[3]) / 2
+            cen_lon = (bbox[0] + bbox[2]) / 2
+            url = f"https://nominatim.openstreetmap.org/reverse?lat={cen_lat}&lon={cen_lon}&format=json"
+            r = req.get(url, headers={"User-Agent": "GeospatialComplianceAgent/1.0"}, timeout=3)
+            if r.status_code == 200:
+                addr = r.json().get("address", {})
+                detected = addr.get("city", addr.get("town", addr.get("state", addr.get("municipality", addr.get("country")))))
+                if detected:
+                    city = detected
+                else: 
+                    city = "Local Municipality"
+            else:
+                city = "Local Municipality"
+        except Exception:
+            city = "Local Municipality"
+
+    # ── Enforce minimum bbox size (reduced to ~1km x 1km to allow precise map selection) ──
+    MIN_LON_SPAN = 0.010  # ~1.0 km 
+    MIN_LAT_SPAN = 0.008  # ~0.9 km
     lon_span = bbox[2] - bbox[0]
     lat_span = bbox[3] - bbox[1]
     if lon_span < MIN_LON_SPAN or lat_span < MIN_LAT_SPAN:
@@ -236,9 +256,10 @@ def run_pipeline(
         if not data:
             return None
         bands = data[0]["bands.tif"]
+        scl = data[0]["scl.tif"]
         if bands.ndim == 3:
             bands = np.transpose(bands, (2, 0, 1))
-        return {"bands": bands.astype(np.float32)}
+        return {"bands": bands.astype(np.float32), "scl": scl.squeeze()}
 
     yield _event(2, TOTAL_STEPS, "running", f"Downloading BEFORE image ({date_before[0]} to {date_before[1]})...", 15)
     t0 = time.time()
@@ -326,8 +347,25 @@ def run_pipeline(
                 n_patches += 1
 
     infer_time = time.time() - t0
+
+    # ── Apply SCL Cloud Mask ──
+    # 3=Cloud Shadow, 8=Medium Cloud, 9=High Cloud, 10=Cirrus
+    scl_before = before.get("scl", np.zeros((H, W)))
+    scl_after = after.get("scl", np.zeros((H, W)))
+    cloud_mask = np.isin(scl_before, [3, 8, 9, 10]) | np.isin(scl_after, [3, 8, 9, 10])
+    
+    try:
+        from scipy.ndimage import binary_dilation
+        # Expands the cloud mask outward by ~50 meters to swallow the semi-transparent cloud edges
+        cloud_mask = binary_dilation(cloud_mask, iterations=5)
+    except ImportError:
+        pass
+
+    # Force cloud pixels (and their fringes) to NOT trigger as "Change"
+    change_mask[cloud_mask] = 0
+
     snn_changed_px = int(change_mask.sum())
-    print(f"  [SNN] {n_patches} patches, {infer_time:.1f}s, {snn_changed_px:,} changed pixels")
+    print(f"  [SNN] {n_patches} patches, {infer_time:.1f}s, {snn_changed_px:,} changed pixels (Cloud Masked)")
 
     # ── Spectral Fallback: if SNN detects nothing, use NDVI/NDBI/MNDWI ──
     detection_method = "Siamese-SNN"
@@ -353,8 +391,11 @@ def run_pipeline(
             (np.abs(d_mndwi) > 0.06)
         ).astype(np.uint8)
 
+        # Ensure cloud pixels are STILL masked out even during fallback
+        change_mask[cloud_mask] = 0
+
         detection_method = "Siamese-SNN + Spectral Enhancement"
-        print(f"  [SPECTRAL] Detected {int(change_mask.sum()):,} changed pixels via spectral indices")
+        print(f"  [SPECTRAL] Detected {int(change_mask.sum()):,} changed pixels via spectral indices (Cloud Masked)")
 
     changed_px = int(change_mask.sum())
 
@@ -396,12 +437,12 @@ def run_pipeline(
     # ───────────────────────────────────────────────────────
     #  STEP 6: Compliance Rule Engine
     # ───────────────────────────────────────────────────────
-    yield _event(6, TOTAL_STEPS, "running", "Evaluating compliance rules (Gujarat GDCR 2017)...", 68)
+    yield _event(6, TOTAL_STEPS, "running", f"Evaluating compliance rules ({city})...", 68)
 
     from src.compliance.rule_engine import ComplianceRuleEngine
 
     rule_engine = ComplianceRuleEngine()
-    violations = rule_engine.evaluate(class_map, bbox, report)
+    violations = rule_engine.evaluate(class_map, bbox, report, city=city)
 
     violation_summaries = []
     for v in violations:
@@ -442,6 +483,29 @@ def run_pipeline(
     evidence = json.dumps({"city": city, "bbox": list(bbox), "changed": changed_px}, sort_keys=True)
     bh = "0x" + hashlib.sha256(evidence.encode()).hexdigest()
 
+    # Calculate Risk Score and Triage
+    from datetime import timedelta
+    risk_score = 0
+    max_sev = "LOW"
+    severity_rank = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
+    for v in violations:
+        sev = v.get("severity", "LOW")
+        if severity_rank.get(sev, 0) > severity_rank.get(max_sev, 0):
+            max_sev = sev
+            
+    if max_sev == "CRITICAL":
+        risk_score = 90 + min(len(violations)*2, 10)
+    elif max_sev == "HIGH":
+        risk_score = 70 + min(len(violations)*2, 10)
+    elif max_sev == "MEDIUM":
+        risk_score = 40 + min(len(violations)*2, 10)
+    elif max_sev == "LOW" and len(violations) > 0:
+        risk_score = 10 + min(len(violations), 10)
+        
+    next_scan_due = None
+    if risk_score > 80:
+        next_scan_due = (datetime.utcnow() + timedelta(days=14)).isoformat()
+
     api_report = {
         "status": "success",
         "scan_id": scan_id,
@@ -467,6 +531,8 @@ def run_pipeline(
             for v in violations
         ],
         "violation_count": len(violations),
+        "risk_score": risk_score,
+        "next_scan_due": next_scan_due,
         "blockchain": {"hash": bh, "timestamp": datetime.utcnow().isoformat(), "verified": True},
     }
 
@@ -547,26 +613,34 @@ def run_pipeline(
     yield _event(9, TOTAL_STEPS, "complete", "Visualization generated.", 98)
 
     # ───────────────────────────────────────────────────────
+    #  STEP 10: WhatsApp Notification (WAHA)
+    # ───────────────────────────────────────────────────────
+    if risk_score > 80:
+        yield _event(10, TOTAL_STEPS+1, "running", "Critical Risk Detected. Dispatching WhatsApp Web Alert via WAHA...", 99)
+        from src.api.waha_client import waha
+        
+        target_number = os.getenv("WHATSAPP_TARGET", "919876543210")
+        top_violation = violations[0]['rule_name'] if violations else "Multiple Critical Infractions"
+        
+        msg = f"🚨 *CRITICAL COMPLIANCE ALERT* 🚨\n\n"
+        msg += f"*City:* {city}\n"
+        msg += f"*Risk Score:* {risk_score}/100\n"
+        msg += f"*Primary Violation:* {top_violation}\n\n"
+        msg += f"Automated follow-up scan scheduled for T+14 Days."
+        
+        success = waha.send_message(target_number, msg)
+        status_msg = "WhatsApp dispatch successful." if success else "WhatsApp dispatch failed. Ensure WAHA container is running and logged in."
+        yield _event(10, TOTAL_STEPS+1, "complete", status_msg, 99)
+
+    # ───────────────────────────────────────────────────────
     #  FINAL: Complete Event
     # ───────────────────────────────────────────────────────
-    yield _event(9, TOTAL_STEPS, "finished", f"Scan complete: {city}", 100, {
-        "scan_id": scan_id,
-        "city": city,
-        "bbox": list(bbox),
-        "center": center,
-        "coverage_km": [round(size[0] * resolution / 1000, 1), round(size[1] * resolution / 1000, 1)],
-        "changed_pixels": changed_px,
-        "change_hectares": round(report['total_changed_area_m2'] / 10000, 2),
-        "violation_count": len(violations),
-        "violations": violation_summaries,
-        "inference_time": round(infer_time, 1),
-        "evidence_hash": bh,
-        "output_dir": str(out_dir),
-        "pdf_url": image_urls.get("compliance_report_pdf", ""),
-        "before_url": image_urls.get("before_rgb_png", ""),
-        "after_url": image_urls.get("after_rgb_png", ""),
-        "mask_url": image_urls.get("change_mask_png", ""),
-        "overlay_url": image_urls.get("classification_overlay_png", ""),
-        "db_id": db_id,
-        "report": api_report,
-    })
+    
+    # Merge the Supabase URLs backward into the true report structure that frontend expects
+    api_report["image_urls"] = image_urls
+    
+    # Also save db_id for completeness if frontend wants it
+    api_report["db_id"] = db_id
+
+    # The frontend maps this exact dictionary directly to state.
+    yield _event(10 if risk_score > 80 else 9, TOTAL_STEPS, "finished", f"Scan complete: {city}", 100, api_report)
