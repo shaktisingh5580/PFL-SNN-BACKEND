@@ -1,9 +1,11 @@
 """
 FastAPI backend server with chat, WebSocket, detection, compliance, and reporting endpoints.
 """
+import json
 import logging
 import asyncio
 import uuid
+import threading
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -362,27 +364,55 @@ def create_app() -> "FastAPI":
         """
         Stream a live satellite scan via Server-Sent Events (SSE).
 
-        The frontend connects to this endpoint with a POST containing the
-        bounding box drawn on the map. Progress events are streamed back
-        in real-time as the pipeline runs each step.
+        The pipeline is blocking (network I/O + model inference), so we run it
+        in a background thread and push events through a queue to avoid
+        starving the async event loop (which would cause uvicorn to shut down).
 
         Each line is a JSON object with:
           step, total_steps, status, message, progress (0-100), data
         """
         from fastapi.responses import StreamingResponse
         from src.pipeline.orchestrator import run_pipeline
+        import queue as _queue
 
         bbox_tuple = tuple(request.bbox)
+        q: _queue.Queue = _queue.Queue()
+        _SENTINEL = object()
 
-        def event_stream():
-            for event in run_pipeline(
-                bbox=bbox_tuple,
-                city=request.city,
-                date_before=tuple(request.date_before),
-                date_after=tuple(request.date_after),
-                resolution=request.resolution,
-            ):
-                yield f"data: {event}\n\n"
+        def _run_pipeline_thread():
+            """Run blocking pipeline in a thread, push events to queue."""
+            try:
+                for event in run_pipeline(
+                    bbox=bbox_tuple,
+                    city=request.city,
+                    date_before=tuple(request.date_before),
+                    date_after=tuple(request.date_after),
+                    resolution=request.resolution,
+                ):
+                    q.put(event)
+            except Exception as exc:
+                err = json.dumps({"status": "error", "message": str(exc), "progress": 0})
+                q.put(err + "\n")
+            finally:
+                q.put(_SENTINEL)
+
+        # Start pipeline in daemon thread so it doesn't block shutdown
+        t = threading.Thread(target=_run_pipeline_thread, daemon=True)
+        t.start()
+
+        async def event_stream():
+            loop = asyncio.get_event_loop()
+            while True:
+                # Poll queue without blocking the event loop
+                try:
+                    item = await loop.run_in_executor(None, q.get, True, 2.0)
+                except _queue.Empty:
+                    # Send a keep-alive comment so the connection stays open
+                    yield ": keep-alive\n\n"
+                    continue
+                if item is _SENTINEL:
+                    break
+                yield f"data: {item}\n\n"
 
         return StreamingResponse(
             event_stream(),
@@ -397,22 +427,26 @@ def create_app() -> "FastAPI":
     @app.post("/api/scan/quick")
     async def scan_quick(request: ScanRequest):
         """
-        Non-streaming scan endpoint. Runs the full pipeline and
-        returns the final result JSON. Useful for testing.
+        Non-streaming scan endpoint. Runs the full pipeline in a thread
+        and returns the final result JSON. Useful for testing.
         """
         from src.pipeline.orchestrator import run_pipeline
 
         bbox_tuple = tuple(request.bbox)
-        last_event = None
-        for event in run_pipeline(
-            bbox=bbox_tuple,
-            city=request.city,
-            date_before=tuple(request.date_before),
-            date_after=tuple(request.date_after),
-            resolution=request.resolution,
-        ):
-            last_event = json.loads(event.strip())
 
+        def _run():
+            last = None
+            for event in run_pipeline(
+                bbox=bbox_tuple,
+                city=request.city,
+                date_before=tuple(request.date_before),
+                date_after=tuple(request.date_after),
+                resolution=request.resolution,
+            ):
+                last = json.loads(event.strip())
+            return last
+
+        last_event = await asyncio.to_thread(_run)
         return JSONResponse(content=last_event or {"error": "Pipeline returned no events"})
 
     # ===== SUPABASE DATA ENDPOINTS (for dashboard) =====

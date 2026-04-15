@@ -28,6 +28,25 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 logger = logging.getLogger(__name__)
 
+# ─── Module-level singleton: define CDSE collection exactly once ───────────
+# DataCollection.define_from() writes to a global enum registry; calling it
+# more than once with the same name raises ValueError.  We guard here so that
+# every scan request in the same server process reuses the same object.
+_CDSE_S2_L2A = None
+try:
+    from sentinelhub import DataCollection as _DC
+    try:
+        _CDSE_S2_L2A = _DC.define_from(
+            _DC.SENTINEL2_L2A,
+            name="S2L2A_CDSE_SH",
+            service_url="https://sh.dataspace.copernicus.eu",
+        )
+    except ValueError:
+        # Already registered from a previous import / hot-reload
+        _CDSE_S2_L2A = _DC["S2L2A_CDSE_SH"]
+except ImportError:
+    pass  # sentinelhub not installed; pipeline will raise a clear error later
+
 
 # ═══════════════════════════════════════════════════════════
 #  Constants
@@ -213,11 +232,8 @@ def run_pipeline(
 
         session = SentinelHubSession(config=config, _token=token_data)
 
-        CDSE_S2_L2A = DataCollection.define_from(
-            DataCollection.SENTINEL2_L2A,
-            name=f"S2L2A_{scan_id[:12]}",
-            service_url="https://sh.dataspace.copernicus.eu",
-        )
+        # Reuse the module-level singleton — safe across all concurrent/serial scans
+        CDSE_S2_L2A = _CDSE_S2_L2A
 
         sh_bbox = BBox(bbox=bbox, crs=CRS.WGS84)
         size = bbox_to_dimensions(sh_bbox, resolution=resolution)

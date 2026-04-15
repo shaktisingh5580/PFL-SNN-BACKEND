@@ -36,7 +36,8 @@ if __name__ == "__main__":
     import uvicorn
 
     HOST = "0.0.0.0"
-    PORT = int(os.getenv("APP_PORT", 8000))
+    # Railway and other PaaS inject 'PORT' automatically.
+    PORT = int(os.getenv("PORT", os.getenv("APP_PORT", 8000)))
     local_ip = get_local_ip()
 
     print("=" * 60)

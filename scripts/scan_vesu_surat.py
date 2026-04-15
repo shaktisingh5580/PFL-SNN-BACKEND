@@ -119,12 +119,15 @@ config.sh_token_url = TOKEN_URL
 session = SentinelHubSession(config=config, _token=token_data)
 print(f"  ✅ Session created with pre-fetched token")
 
-# Define CDSE-specific data collection
-CDSE_S2_L2A = DataCollection.define_from(
-    DataCollection.SENTINEL2_L2A,
-    name="SENTINEL2_L2A_CDSE",
-    service_url="https://sh.dataspace.copernicus.eu",
-)
+# Define CDSE-specific data collection (guard against duplicate enum registration)
+try:
+    CDSE_S2_L2A = DataCollection.define_from(
+        DataCollection.SENTINEL2_L2A,
+        name="SENTINEL2_L2A_CDSE",
+        service_url="https://sh.dataspace.copernicus.eu",
+    )
+except ValueError:
+    CDSE_S2_L2A = DataCollection["SENTINEL2_L2A_CDSE"]
 
 sh_bbox = BBox(bbox=VESU_BBOX, crs=CRS.WGS84)
 size = bbox_to_dimensions(sh_bbox, resolution=10)

@@ -70,13 +70,14 @@ SYSTEM_PROMPT = """You are the Agentic Geospatial Compliance Engine — an AI as
 3. **LEGAL CITATIONS**: You cite specific sections when discussing compliance (e.g., "Gujarat GDCR 2017 S. 12.3 — Water Body Buffer Zone").
 4. **CHANGE ANALYSIS**: You interpret spectral indices (NDVI = vegetation, NDBI = built-up, MNDWI = water) to explain what changed on the ground.
 5. **AUTOMATED TRIAGE**: You are fully aware that the backend automatically scores risk (1-100). If it exceeds 80, the backend natively schedules a T+14 day follow-up. 
-6. **WHATSAPP DISPATCH**: You know that Critical risks instantly trigger WhatsApp Web Alerts to urban planners via the WAHA Docker API.
+6. **WHATSAPP DISPATCH**: You have the autonomous power to send detailed WhatsApp text alerts to the field officer using the `send_whatsapp_dispatch` tool. If a user asks you to "Send this to the field officer" or "Alert the authorities on WhatsApp", call this tool.
 
 ## RULES:
 - Always cite specific laws/sections when discussing compliance.
 - IMPORTANT GEOLOCATION RULE: Check the 'city' or location of the scan. If the scan is NOT in Surat or Gujarat (e.g. Dubai, Paris, Mumbai), DO NOT quote Gujarat GDCR 2017 laws like "Tapi Riverfront". Acknowledge the violations but explicitly state that "Local municipal laws for [City] apply."
 - When presenting scan data, include the Supabase image URLs so the frontend can display them.
 - Present violations with severity badges: [CRITICAL], [HIGH], [MEDIUM], [LOW].
+- WHATSAPP PROTOCOL: Always state "Dispatching WhatsApp text alert to the registered officer...". Since the system currently supports text-only alerts, include the Risk Score, Scan ID, and the image/PDF URLs in the message body so the officer can open them from their phone.
 - If a user asks about a location, use coordinates and suggest scanning it.
 - Be professional — you represent the Municipal Corporation.
 - Keep responses concise but informative.
@@ -351,6 +352,33 @@ if HAS_LANGCHAIN:
         except Exception as e:
             return f"Error: {e}"
 
+    @tool
+    def send_whatsapp_dispatch(message: str) -> str:
+        """
+        Send a WhatsApp alert/message to the official field officer using the WAHA Docker container.
+        Automatically shortens any long links (like satellite images or reports) to keep the message clean.
+        """
+        try:
+            from src.api.waha_client import waha
+            from src.utils.url_shortener import shorten_url
+            import re
+            
+            # Find all URLs and shorten them
+            urls = re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', message)
+            shortened_message = message
+            for url in set(urls):
+                if len(url) > 30: # Only shorten long URLs
+                    shortened_message = shortened_message.replace(url, shorten_url(url))
+            
+            target = os.getenv("WHATSAPP_TARGET", "919824109111")
+            success = waha.send_message(target, shortened_message)
+            
+            if success:
+                return f"✅ Dispatch (with shortened links) sent to officer at {target}."
+            else:
+                return "❌ Dispatch failed. Check WAHA Docker status."
+        except Exception as e:
+            return f"Error in WhatsApp tool: {e}"
 
 # ═══════════════════════════════════════════════════════════
 #  State Schema
@@ -433,6 +461,13 @@ class GeospatialAgent:
                 return
 
             self._build_tools()
+            
+            # Bind tools to LLM
+            if self.tools:
+                self._llm_with_tools = self._llm.bind_tools(self.tools)
+            else:
+                self._llm_with_tools = self._llm
+
             self._build_graph()
             logger.info(f"GeospatialAgent ready: {len(self.tools)} tools")
         except Exception as e:
@@ -453,9 +488,10 @@ class GeospatialAgent:
             search_regulations,
             check_zone_at_location,
             get_scan_statistics,
+            send_whatsapp_dispatch,
         ]
-        # No tool binding — we pre-inject real data to keep it to 1 API call
-        self._llm_with_tools = self._llm
+        # Bind tools to LLM here
+        self._llm_with_tools = self._llm.bind_tools(self.tools)
 
     def _fetch_live_data(self) -> str:
         """Pre-fetch real scan data from Supabase to inject into context."""
@@ -536,11 +572,18 @@ class GeospatialAgent:
 
         graph = StateGraph(ChatState)
         graph.add_node("agent", self._agent_node)
-        graph.set_entry_point("agent")
-        graph.add_edge("agent", END)
+        
+        if self.tools:
+            tool_node = ToolNode(self.tools)
+            graph.add_node("tools", tool_node)
+            graph.add_conditional_edges("agent", self._should_use_tools, {"tools": "tools", "respond": END})
+            graph.add_edge("tools", "agent")
+        else:
+            graph.add_edge("agent", END)
 
+        graph.set_entry_point("agent")
         self.graph = graph.compile(checkpointer=self.memory) if self.memory else graph.compile()
-        logger.info("LangGraph compiled (single-node, pre-injected data)")
+        logger.info("LangGraph compiled with Tool-Calling Loop")
 
     def _agent_node(self, state: ChatState) -> dict:
         """Core reasoning node with pre-injected real data."""
@@ -562,6 +605,9 @@ class GeospatialAgent:
 
     def _should_use_tools(self, state: ChatState) -> str:
         """Route: tools or respond."""
+        last_message = state["messages"][-1]
+        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            return "tools"
         return "respond"
 
     def chat_sync(self, message: str, session_id: str = "default", scan_context: str = "", history: list = None) -> dict:

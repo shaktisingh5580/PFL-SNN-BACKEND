@@ -211,11 +211,20 @@ class ComplianceRuleEngine:
         if city and "surat" not in city.lower() and "gujarat" not in city.lower():
             city_name = city.split(",")[0].strip()
             for v in violations:
+                # Standardize strings for easier replacement
                 v["legal_reference"] = v["legal_reference"].replace("Gujarat GDCR 2017", f"{city_name} Municipal Code")
                 v["legal_reference"] = v["legal_reference"].replace("Gujarat TP & UD Act 1976", f"{city_name} Urban Planning Act")
                 v["legal_reference"] = v["legal_reference"].replace("SUDA Development Plan 2035", f"{city_name} Master Plan 2040")
-                v["legal_reference"] = v["legal_reference"].replace("Surat GDCR — Tapi Riverfront Special Regulation", f"{city_name} Waterway Ordinance")
+                
+                # Broaden the Riverfront replacement to catch any dash variation
+                if "Tapi Riverfront" in v["legal_reference"]:
+                    v["legal_reference"] = f"{city_name} Waterway Ordinance"
+                
                 v["rule_name"] = v["rule_name"].replace("Tapi Riverfront", f"{city_name} River/Coastal")
+                
+                # Final check to strip any remaining "Surat" or "Gujarat" from names/refs
+                v["rule_name"] = v["rule_name"].replace("Surat", city_name).replace("Gujarat", city_name)
+                v["legal_reference"] = v["legal_reference"].replace("Surat", city_name).replace("Gujarat", city_name)
         
         severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
         violations.sort(key=lambda v: severity_order.get(v["severity"], 99))
