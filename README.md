@@ -247,7 +247,7 @@ The frontend is a separate repository — a Next.js dashboard with an interactiv
 ### 1. Clone the Frontend
 
 ```bash
-git clone https://github.com/shaktisingh5580/PFL-SNN-FRONTEND.git
+git clone https://github.com/Pratham-2123/snn-dashboard.git
 cd PFL-SNN-FRONTEND
 npm install
 ```
