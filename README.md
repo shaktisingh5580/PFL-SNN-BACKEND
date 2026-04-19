@@ -240,21 +240,21 @@ The server is now running. Open `http://localhost:8000/docs` to see the interact
 
 ---
 
-## 🖥️ Frontend Setup
+## 🖥️ Dashboard Setup
 
-The frontend is a separate repository — a Next.js dashboard with an interactive satellite map, real-time pipeline monitoring, analytics, and an AI chat interface.
+The dashboard is a separate repository — a Next.js dashboard with an interactive satellite map, real-time pipeline monitoring, analytics, and an AI chat interface.
 
-### 1. Clone the Frontend
+### 1. Clone the Dashboard
 
 ```bash
 git clone https://github.com/Pratham-2123/snn-dashboard.git
-cd PFL-SNN-FRONTEND
+cd snn-dashboard
 npm install
 ```
 
 ### 2. Configure Frontend Environment
 
-Create a `.env.local` file in the frontend project root:
+Create a `.env.local` file in the dashboard project root:
 
 ```env
 # Point this to your backend server
