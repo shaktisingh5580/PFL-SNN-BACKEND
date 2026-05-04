@@ -43,7 +43,10 @@
 - [Tech Stack](#-tech-stack)
 
 ---
+[![GeoGuard AI Demo Video](https://img.youtube.com/vi/MFzIOnUW-c8/maxresdefault.jpg)](https://www.youtube.com/watch?v=MFzIOnUW-c8)
+<p align="center"><i>Click to watch the GeoGuard AI System Demo</i></p>
 
+---
 ## 🌍 Overview
 
 GeoGuard AI is an **end-to-end geospatial compliance engine** that continuously monitors satellite imagery to detect unauthorized land-use changes — construction in protected zones, deforestation, water body encroachment, and more.
